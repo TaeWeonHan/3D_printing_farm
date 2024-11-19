@@ -2,7 +2,7 @@ import simpy
 import numpy as np
 import pandas as pd
 from config_Simpy import *  # 설정 파일 (JOB_TYPES, PRINTERS, PRINTERS_INVEN 등)
-
+# test
 class Display:
     def __init__(self, env, job_arrival_manager):
         self.env = env
