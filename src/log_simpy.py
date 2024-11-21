@@ -1,0 +1,3 @@
+DAILY_EVENTS = []
+
+DAILY_REPORTS = []

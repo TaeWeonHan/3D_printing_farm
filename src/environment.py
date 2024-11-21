@@ -4,15 +4,15 @@ import pandas as pd
 from config_Simpy import *  # 설정 파일 (JOB_TYPES, PRINTERS, PRINTERS_INVEN 등)
 # test
 class Display:
-    def __init__(self, env, job_arrival_manager):
+    def __init__(self, env, daily_events):
         self.env = env
-        self.job_arrival_manager = job_arrival_manager
+        self.daily_events = daily_events
 
     def track_days(self):
         """Day 출력 및 추적"""
         while True:
             day = int(self.env.now // 24) + 1
-            print(f"\n===== Day {day} =====")
+            self.daily_events.append(f"\n===== Day {day} Report: =====")
             yield self.env.timeout(24)
 
 class Customer:
@@ -160,26 +160,24 @@ class Printer:
             else:
                 yield self.env.timeout(1)  # 큐가 비었을 경우 1시간 대기
 
-def run_simulation():
-    env = simpy.Environment()
-    packaging = Packaging(env)  # Packaging 객체 생성
-    post_processor = PostProcessing(env, packaging)  # PostProcessing 객체 생성
-    customer = Customer(env)
-    display = Display(env, customer)
-    printers = [Printer(env, pid, details["VOL"], post_processor) for pid, details in PRINTERS.items()]
+def create_env(daily_events):
+    """환경 및 객체를 초기화하고 반환"""
+    simpy_env = simpy.Environment()
 
-    # Day 추적 프로세스
-    env.process(display.track_days())
+    # 각 객체 생성
+    packaging = Packaging(simpy_env)
+    post_processor = PostProcessing(simpy_env, packaging)
+    customer = Customer(simpy_env)
+    display = Display(simpy_env, customer)
+    printers = [Printer(simpy_env, pid, details["VOL"], post_processor) for pid, details in PRINTERS.items()]
 
-    # 실시간 Job 생성 프로세스
-    env.process(customer.create_jobs_continuously())
-
-    # 프린터 작업 프로세스
+    # Day 추적 및 실시간 Job 생성 프로세스 추가
+    simpy_env.process(display.track_days())
+    simpy_env.process(customer.create_jobs_continuously())
     for printer in printers:
-        env.process(printer.process_jobs())
-    
-    # 시뮬레이션 실행
-    env.run(until=SIM_TIME * 24)
+        simpy_env.process(printer.process_jobs())
+
+    # 초기화된 환경 및 관련 객체 반환
+    return simpy_env, packaging, post_processor, customer, display, printers, daily_events
 
 
-run_simulation()

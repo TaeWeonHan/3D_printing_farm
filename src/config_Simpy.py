@@ -30,7 +30,7 @@ import random
 # PRINTERS_INVEN: 각 프린터별 Job 대기열을 저장하는 리스트
 
 # 시뮬레이션 설정
-SIM_TIME = 7  # 시뮬레이션 기간 (일 단위)
+SIM_TIME = 5  # 시뮬레이션 기간 (일 단위)
 
 # Job 생성 파라미터 설정
 JOB_ARRIVAL_RATE = 5  # 단위 시간당 평균 Job 발생 수 (포아송 분포의 λ 값)
@@ -86,3 +86,5 @@ PACKAGING_MACHINE = {
 }
 
 JOB_CREATION_INTERVAL = 1  # 평균 1시간 간격으로 Job 생성
+
+PRINT_SIM_EVENTS = True
