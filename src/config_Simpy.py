@@ -30,10 +30,10 @@ import random
 # PRINTERS_INVEN: 각 프린터별 Job 대기열을 저장하는 리스트
 
 # 시뮬레이션 설정
-SIM_TIME = 5  # 시뮬레이션 기간 (일 단위)
+SIM_TIME = 2  # 시뮬레이션 기간 (일 단위)
 
 # Job 생성 파라미터 설정
-JOB_ARRIVAL_RATE = 5  # 단위 시간당 평균 Job 발생 수 (포아송 분포의 λ 값)
+JOB_ARRIVAL_RATE = 2  # 단위 시간당 평균 Job 발생 수 (포아송 분포의 λ 값)
 JOB_INTERVAL = 24  # Job 생성 간격 (시간 단위), 예: 매일 Job 생성
 
 # 주문 관련 설정
@@ -49,6 +49,17 @@ JOB_TYPES = {
         "PACKAGING_TIME_RANGE": (10, 30)  # 포장시간 범위
     }
 }
+
+COST_TYPES = {
+    0: {
+        'HOLDING_COST': 0.1,
+        'PRINTING_COST': 1,
+        'POSTPROCESSING_COST': 1,
+        'PACKAGING_COST': 1,
+        'DELIVERY_COST': 1,
+        'SHORTAGE_COST' : 1
+    }
+}
 DEMAND_QTY_MIN = 1
 DEMAND_QTY_MAX = 7
 # 하루 동안 주문 수량 결정
@@ -58,9 +69,9 @@ def DEMAND_QTY_FUNC():
 
 # 3D 프린터 정보 설정
 PRINTERS = {
-    0: {"ID": 0, "VOL": 8},
+    0: {"ID": 0, "VOL": 24},
     1: {"ID": 1, "VOL": 27},
-    2: {"ID": 2, "VOL": 2.84},
+    2: {"ID": 2, "VOL": 20},
     3: {"ID": 3, "VOL": 16.78},
     4: {"ID": 4, "VOL": 42.875}
 }
@@ -86,5 +97,6 @@ PACKAGING_MACHINE = {
 }
 
 JOB_CREATION_INTERVAL = 1  # 평균 1시간 간격으로 Job 생성
-
+VISUALIZATION = True
 PRINT_SIM_EVENTS = True
+PRINT_SIM_COST = True  # True로 설정하면 비용이 출력됨, False로 설정하면 출력되지 않음
