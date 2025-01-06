@@ -3,8 +3,9 @@ import environment as env  # 환경 생성 및 프로세스 정의
 from log_simpy import *  # 로그 및 이벤트 기록
 import pandas as pd  # 데이터 분석 및 저장
 import visualization
+
 # Step 1: 환경 및 객체 초기화
-simpy_env, packaging, post_processor, customer, display, printers, daily_events = env.create_env(DAILY_EVENTS)
+simpy_env, packaging, post_processor, customer, display, printers, daily_events, satisfication = env.create_env(DAILY_EVENTS)
 
 # Step 2: SimPy 이벤트 프로세스 설정
 env.simpy_event_processes(simpy_env, packaging, post_processor, customer, display, printers, daily_events)
@@ -28,11 +29,50 @@ for day in range(SIM_TIME):  # 시뮬레이션을 설정된 기간 동안 실행
     for job in JOB_LOG:
         if job['day'] == day + 1:  # 현재 Day의 Job만 출력
             print(f"Job {job['job_id']} | Volume: {job['volume']:.2f} | "
+                  f"Creation Time: {job['create_time']:.4f} | "
                   f"Build Time: {job['build_time']} | Post-Processing Time: {job['post_processing_time']} | "
                   f"Packaging Time: {job['packaging_time']}")
+            
+    if PRINT_SATISFICATION:
+        "SATISFICATION_LOG에 저장된 만족도를 누적해서 출력"
+        print(f"\n===== Total Satisfication for Day {day + 1}: {satisfication.total_satisfication:.4f} =====\n")
 
     daily_events.clear()  # 로그 초기화
     env.Cost.clear_cost()  # 비용 초기화
+
+day = SIM_TIME + 1
+
+# 남은 작업 처리
+while any(printer.inventory for printer in printers) or post_processor.queue or packaging.queue:
+
+    simpy_env.run(until=simpy_env.now + 24)
+
+    if PRINT_SIM_EVENTS:
+        # 추가 작업 처리 중 이벤트 로그 출력
+        for log in daily_events:
+            print(log)
+
+    if PRINT_SIM_COST:  # 비용 출력
+        print("\n===== Additional Cost Report for Day", day, "=====")
+        for cost_type, cost_value in DAILY_COST_REPORT.items():
+            print(f"{cost_type}: ${cost_value:.2f}")
+
+    # 남은 작업 처리 중 JOB_LOG 출력
+    print("\n===== JOB LOG for Additional Day", day, "=====")
+    for job in JOB_LOG:
+        if job['day'] == day:  # 현재 Day의 Job만 출력
+            print(f"Job {job['job_id']} | Volume: {job['volume']:.2f} | "
+                  f"Build Time: {job['build_time']} | Post-Processing Time: {job['post_processing_time']} | "
+                  f"Packaging Time: {job['packaging_time']}")
+            
+    if PRINT_SATISFICATION:
+        "SATISFICATION_LOG에 저장된 만족도를 누적해서 출력"
+        print(f"\n===== Total Satisfication for Day {day}: {satisfication.total_satisfication:.4f} =====\n")
+
+    daily_events.clear()  # 로그 초기화
+    env.Cost.clear_cost()  # 비용 초기화
+
+    day += 1
 
 # 시뮬레이션 종료 후 전체 JOB_LOG 출력
 print("\n============= Final JOB LOG =============")
@@ -42,6 +82,7 @@ for job in JOB_LOG:
           f"Packaging Time: {job['packaging_time']}")
 
 # DAILY_REPORTS 데이터를 DataFrame으로 변환
+print(DAILY_REPORTS)
 export_Daily_Report = []
 for record in DAILY_REPORTS:
     if record['process'] == 'Printing':
@@ -73,24 +114,9 @@ for record in DAILY_REPORTS:
 
 # DataFrame 생성
 daily_reports = pd.DataFrame(export_Daily_Report)
-if VISUALIZATION != False:
-    visualization.visualization(export_Daily_Report)
-
-# 컬럼 이름 설정
-columns_list = [
-    "DAY",
-    "JOB_ID",
-    "ASSIGNED_PRINTER",
-    "PRINTING_START",
-    "PRINTING_FINISH",
-    "ASSIGNED_POSTPROCESS_WORKER",
-    "POSTPROCESSING_START",
-    "POSTPROCESSING_FINISH",
-    "ASSIGNED_PACKAGING_WORKER",
-    "PACKAGING_START",
-    "PACKAGING_FINISH"
-]
-daily_reports = daily_reports[columns_list]
 
 # CSV 파일로 저장
 daily_reports.to_csv("./Daily_Report.csv", index=False)
+
+if VISUALIZATION != False:
+    visualization.visualization(export_Daily_Report)

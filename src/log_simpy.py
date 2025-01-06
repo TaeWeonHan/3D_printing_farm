@@ -1,6 +1,7 @@
 DAILY_EVENTS = []
 DAILY_REPORTS = []
 COST_LOG = []
+SATISFICATION_LOG = []
 JOB_LOG = []
 DAILY_COST_REPORT = {
     'Holding cost': 0,

@@ -59,31 +59,75 @@ def visualization(export_Daily_Report):
     for _, row in daily_reports.iterrows():
         # 프린팅 작업
         if not pd.isna(row["ASSIGNED_PRINTER"]):
+            y_pos = resource_map[f"Printer {int(row['ASSIGNED_PRINTER'])}"]
+            duration = row["PRINTING_FINISH"] - row["PRINTING_START"]
             ax.barh(
-                resource_map[f"Printer {int(row['ASSIGNED_PRINTER'])}"],
-                row["PRINTING_FINISH"] - row["PRINTING_START"],
+                y_pos,
+                duration,
                 left=row["PRINTING_START"],
                 color=job_colors[row["JOB_ID"]],
                 edgecolor='black',
-                label=f"Job {row['JOB_ID']}" if f"Job {row['JOB_ID']}" not in ax.get_legend_handles_labels()[1] else ""
+                label=f"Job {row['JOB_ID']}" if f"Job {row['JOB_ID']}" not in ax.get_legend_handles_labels()[1] else None
             )
+            ax.text(
+                row["PRINTING_START"] + duration / 2,
+                y_pos,
+                f"{row['JOB_ID']}",
+                va='center', ha='center', color='white', fontsize=8, weight='bold'
+            )
+            ax.text(
+                row["PRINTING_START"] + duration / 2,
+                y_pos - 0.2,
+                f"{duration:.2f}h",
+                va='center', ha='center', color='black', fontsize=8
+            )
+
         # 후처리 작업
         if not pd.isna(row["ASSIGNED_POSTPROCESS_WORKER"]):
+            y_pos = resource_map[f"Post-Processor {int(row['ASSIGNED_POSTPROCESS_WORKER'])}"]
+            duration = row["POSTPROCESSING_FINISH"] - row["POSTPROCESSING_START"]
             ax.barh(
-                resource_map[f"Post-Processor {int(row['ASSIGNED_POSTPROCESS_WORKER'])}"],
-                row["POSTPROCESSING_FINISH"] - row["POSTPROCESSING_START"],
+                y_pos,
+                duration,
                 left=row["POSTPROCESSING_START"],
                 color=job_colors[row["JOB_ID"]],
                 edgecolor='black'
             )
+            ax.text(
+                row["POSTPROCESSING_START"] + duration / 2,
+                y_pos,
+                f"{row['JOB_ID']}",
+                va='center', ha='center', color='white', fontsize=8, weight='bold'
+            )
+            ax.text(
+                row["POSTPROCESSING_START"] + duration / 2,
+                y_pos - 0.2,
+                f"{duration:.2f}h",
+                va='center', ha='center', color='black', fontsize=8
+            )
+
         # 포장 작업
         if not pd.isna(row["ASSIGNED_PACKAGING_WORKER"]):
+            y_pos = resource_map[f"Packaging {int(row['ASSIGNED_PACKAGING_WORKER'])}"]
+            duration = row["PACKAGING_FINISH"] - row["PACKAGING_START"]
             ax.barh(
-                resource_map[f"Packaging {int(row['ASSIGNED_PACKAGING_WORKER'])}"],
-                row["PACKAGING_FINISH"] - row["PACKAGING_START"],
+                y_pos,
+                duration,
                 left=row["PACKAGING_START"],
                 color=job_colors[row["JOB_ID"]],
                 edgecolor='black'
+            )
+            ax.text(
+                row["PACKAGING_START"] + duration / 2,
+                y_pos,
+                f"{row['JOB_ID']}",
+                va='center', ha='center', color='white', fontsize=8, weight='bold'
+            )
+            ax.text(
+                row["PACKAGING_START"] + duration / 2,
+                y_pos - 0.2,
+                f"{duration:.2f}h",
+                va='center', ha='center', color='black', fontsize=8
             )
 
     # 세로축 설정
@@ -93,10 +137,10 @@ def visualization(export_Daily_Report):
     ax.set_ylabel("Resources")
     ax.set_title("Job Scheduling Gantt Chart")
 
-    # 범례 설정
+    # 범례 추가
     handles, labels = ax.get_legend_handles_labels()
-    by_label = dict(zip(labels, handles))
-    ax.legend(by_label.values(), by_label.keys(), loc='upper right', bbox_to_anchor=(1.15, 1))
+    unique_labels = dict(zip(labels, handles))
+    ax.legend(unique_labels.values(), unique_labels.keys(), loc='upper right', bbox_to_anchor=(1.15, 1))
 
     # 레이아웃 조정 및 출력
     plt.tight_layout()

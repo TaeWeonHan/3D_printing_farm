@@ -50,6 +50,10 @@ JOB_TYPES = {
     }
 }
 
+SATISFICATION_TYPE = {
+    "POSITIVE" : 1,
+    "NEGATIVE" : -0.1
+}
 COST_TYPES = {
     0: {
         'HOLDING_COST': 0.1,
@@ -97,6 +101,8 @@ PACKAGING_MACHINE = {
 }
 
 JOB_CREATION_INTERVAL = 1  # 평균 1시간 간격으로 Job 생성
+
+PRINT_SATISFICATION = True
 VISUALIZATION = True
 PRINT_SIM_EVENTS = True
 PRINT_SIM_COST = True  # True로 설정하면 비용이 출력됨, False로 설정하면 출력되지 않음

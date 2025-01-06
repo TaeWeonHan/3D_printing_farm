@@ -18,16 +18,22 @@ class Display:
      
 # Customer 클래스: 지속적으로 Job(작업)을 생성
 class Customer:
-    def __init__(self, env, shortage_cost, daily_events):
+    def __init__(self, env, shortage_cost, daily_events, satisfication):
         self.env = env  # SimPy 환경 객체
         self.daily_events = daily_events  # 일별 이벤트 로그 리스트
         self.current_job_id = 0  # Job ID 초기값
         self.last_assigned_printer = -1  # 마지막으로 할당된 프린터 ID
         self.unit_shortage_cost = shortage_cost  # Shortage cost
+        self.satisfication = satisfication
 
     def create_jobs_continuously(self):
         """지속적으로 Job을 생성하고 프린터에 할당"""
+        
         while True:
+            # SIM_TIME 이후에는 Job 생성 중단
+            if self.env.now >= SIM_TIME * 24:
+                break
+
             # 현재 날짜 계산
             day = int(self.env.now // 24) + 1
 
@@ -38,6 +44,7 @@ class Customer:
             JOB_LOG.append({
                 'day': day,
                 'job_id': job.job_id,
+                'create_time': job.create_time,
                 'volume': job.volume,
                 'build_time': job.build_time,
                 'post_processing_time': job.post_processing_time,
@@ -66,6 +73,9 @@ class Customer:
                 job.shortage = 1  # Shortage는 한 번에 한 프린터가 부족할 때 1로 설정
                 
                 Cost.cal_cost(job, "Shortage cost")
+                
+                # 고객 만족도 계산
+                self.satisfication.cal_satisfication(job, self.env.now)
 
             # 다음 Job 생성 간격 (지수 분포 사용)
             interval = np.random.exponential(JOB_CREATION_INTERVAL)
@@ -124,12 +134,13 @@ class PostProcessing:
 
 # Packaging 클래스: 포장 작업을 관리
 class Packaging:
-    def __init__(self, env, packaging_cost, daily_events):
+    def __init__(self, env, packaging_cost, daily_events, satisfication):
         self.env = env  # SimPy 환경 객체
         self.daily_events = daily_events  # 일별 이벤트 로그 리스트
         self.workers = {worker_id: {"is_busy": False} for worker_id in PACKAGING_MACHINE.keys()}
         self.unit_packaging_cost = packaging_cost
         self.queue = []  # 대기열
+        self.satisfication = satisfication
 
     def assign_job(self, job):
         """포장 작업자에게 Job을 할당"""
@@ -150,7 +161,7 @@ class Packaging:
         yield self.env.timeout(job.packaging_time / 60)  # 포장 시간을 시간 단위로 변환
         end_time = self.env.now
         self.daily_events.append(
-            f"{int(end_time % 24)}:{int((end_time % 1) * 60):02d} - Job {job.job_id} is finishing on Worker {worker_id} (Packaging)"
+            f"{int(end_time % 24)}:{int((end_time % 1) * 60):02d} - Job {job.job_id} is finishing on Worker {worker_id} (Packaging) & End_Time: s{end_time: .4f}"
         )
         # DAILY_REPORTS에 기록
         DAILY_REPORTS.append({
@@ -162,6 +173,9 @@ class Packaging:
         })
         # Packaging 비용 계산
         Cost.cal_cost(job, "Packaging cost")
+
+        # 고객 만족도 계산
+        self.satisfication.cal_satisfication(job, end_time)
         self.workers[worker_id]["is_busy"] = False
 
         # 대기열에서 다음 Job 처리
@@ -174,6 +188,7 @@ class Job:
     def __init__(self, env, job_id, config):
         self.env = env  # SimPy 환경 객체
         self.job_id = job_id  # Job ID
+        self.create_time = env.now  # Job 생성 시간 기록
         self.volume = np.random.uniform(*config["VOLUME_RANGE"])  # Job 볼륨
         self.build_time = np.random.randint(*config["BUILD_TIME_RANGE"])  # 제작 시간
         self.post_processing_time = np.random.randint(*config["POST_PROCESSING_TIME_RANGE"])  # 후처리 시간
@@ -282,6 +297,31 @@ class Cost:
         for key in DAILY_COST_REPORT.keys():
             DAILY_COST_REPORT[key] = 0
 
+class Satisfication:
+    def __init__(self, env, daily_events):
+        self.env = env
+        self.daily_events = daily_events
+        self.total_satisfication = 0
+
+    def cal_satisfication(self, job, end_time):
+        
+        """고객 만족도 계산 및 기록"""
+        if job.create_time is not None and end_time is not None and (job.create_time != end_time):
+            satisfication = SATISFICATION_TYPE["POSITIVE"] / (end_time - job.create_time)
+            self.total_satisfication += satisfication
+            self.daily_events.append(
+                f"Job {job.job_id}: Satisfication calculated as {satisfication:.4f}\nTotal Satisfication: {self.total_satisfication: .4f}"
+            )
+        
+        elif job.create_time == end_time:
+            satisfication = SATISFICATION_TYPE["NEGATIVE"]
+            self.total_satisfication += satisfication
+            self.daily_events.append(
+                f"Job {job.job_id}: No printer assigned, satisfication set to {satisfication:.4f}\nTotal Satisfication: {self.total_satisfication: .4f}"
+            )
+
+        SATISFICATION_LOG.append(self.total_satisfication)
+
 # 환경 생성 함수
 def create_env(daily_events):
     """
@@ -290,10 +330,12 @@ def create_env(daily_events):
     simpy_env = simpy.Environment()  # SimPy 환경 생성
 
     # 각 객체 생성
-    packaging = Packaging(simpy_env, COST_TYPES[0]['PACKAGING_COST'], daily_events)
+    satisfication = Satisfication(simpy_env, daily_events)
+    packaging = Packaging(simpy_env, COST_TYPES[0]['PACKAGING_COST'], daily_events, satisfication)
     post_processor = PostProcessing(simpy_env, COST_TYPES[0]['POSTPROCESSING_COST'], daily_events, packaging)
-    customer = Customer(simpy_env, COST_TYPES[0]['SHORTAGE_COST'], daily_events)
+    customer = Customer(simpy_env, COST_TYPES[0]['SHORTAGE_COST'], daily_events, satisfication)
     display = Display(simpy_env, daily_events)
+    
 
     # 각 프린터 생성
     printers = [
@@ -302,7 +344,7 @@ def create_env(daily_events):
     ]
 
     # 초기화된 환경 및 객체 반환
-    return simpy_env, packaging, post_processor, customer, display, printers, daily_events
+    return simpy_env, packaging, post_processor, customer, display, printers, daily_events, satisfication
 
 
 def simpy_event_processes(simpy_env, packaging, post_processor, customer, display, printers, daily_events):
