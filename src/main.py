@@ -28,7 +28,7 @@ for day in range(SIM_TIME):  # 시뮬레이션을 설정된 기간 동안 실행
     print("\n===== JOB LOG for Day", day + 1, "=====")
     for job in JOB_LOG:
         if job['day'] == day + 1:  # 현재 Day의 Job만 출력
-            print(f"Job {job['job_id']} | Volume: {job['volume']:.2f} | "
+            print(f"Job {job['job_id']} | Width: {job['width']} x Height: {job['height']} x Depth: {job['depth']} = Volume: {job['volume']} | "
                   f"Creation Time: {job['create_time']:.4f} | "
                   f"Build Time: {job['build_time']} | Post-Processing Time: {job['post_processing_time']} | "
                   f"Packaging Time: {job['packaging_time']}")
@@ -111,7 +111,7 @@ for record in DAILY_REPORTS:
                 item["ASSIGNED_PACKAGING_WORKER"] = record.get('worker_id', None)
                 item["PACKAGING_START"] = record['start_time']
                 item["PACKAGING_FINISH"] = record['end_time']
-
+print(export_Daily_Report)
 # DataFrame 생성
 daily_reports = pd.DataFrame(export_Daily_Report)
 
