@@ -33,7 +33,7 @@ import random
 SIM_TIME = 2  # 시뮬레이션 기간 (일 단위)
 
 # Job 생성 파라미터 설정
-JOB_CREATION_INTERVAL = 0.2  # 평균 1시간 간격으로 Job 생성
+JOB_CREATION_INTERVAL = 1  # 평균 1시간 간격으로 Job 생성
 
 # MIN, MAX RANGE / 단위: mm
 LENGHT_RANGE = {
