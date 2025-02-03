@@ -25,6 +25,7 @@ class Customer:
         self.last_assigned_printer = -1  # 마지막으로 할당된 프린터 ID
         self.unit_shortage_cost = shortage_cost  # Shortage cost
         self.satisfication = satisfication
+        self.create_job_list = []
 
     def create_jobs_continuously(self):
         """지속적으로 Job을 생성하고 프린터에 할당"""
@@ -58,16 +59,14 @@ class Customer:
             for printer_id, printer in PRINTERS.items():
                 if job.width <= printer["WIDTH"] and job.height <= printer["HEIGHT"] and job.depth <= printer["DEPTH"]:  # Job의 볼륨이 프린터 용량 이하인지 확인
                     suitable_printers.append(printer_id)
-
+                    
+            # 적합한 프린터 정보를 Job 객체에 저장
+            job.suitable_printers = suitable_printers
+            
             # 프린터 할당
             if suitable_printers:
-                self.last_assigned_printer = (self.last_assigned_printer + 1) % len(suitable_printers)
-                printer_id = suitable_printers[self.last_assigned_printer]
-                PRINTERS_INVEN[printer_id].append(job)
-                self.daily_events.append(
-                    f"{int(self.env.now % 24)}:{int((self.env.now % 1) * 60):02d} - Job {job.job_id} is assigned to Printer {printer_id}"
-                )
-                
+                self.create_job_list.append(job)
+
             else:
                 # Shortage cost 발생: 적합한 프린터가 없을 때
                 self.daily_events.append(
@@ -130,13 +129,8 @@ class PostProcessing:
 
         # 후처리 완료 후 포장 작업에 전달
         self.packaging.assign_job(job)
-        '''
+
         # 대기열에 Job이 있으면 다음 작업 처리
-        if self.queue:
-            next_job = self.queue.pop(0)
-            self.env.process(self.process_job(worker_id, next_job))
-        '''
-        # 대기열에서 다음 Job 처리
         if self.queue:
             # 대기열에 작업이 있는 경우
             next_job = self.queue.pop(0)  # 대기열에서 첫 번째 작업을 꺼냄
@@ -174,7 +168,7 @@ class Packaging:
     def process_job(self, worker_id, job):
         """Job 포장 처리"""
         start_time = self.env.now
-        yield self.env.timeout(job.packaging_time)  # 포장 시간을 시간 단위로 변환
+        yield self.env.timeout(job.packaging_time / 60)  # 포장 시간을 시간 단위로 변환
         end_time = self.env.now
         self.daily_events.append(
             f"{int(end_time % 24)}:{int((end_time % 1) * 60):02d} - Job {job.job_id} is finishing on Worker {worker_id} (Packaging) & End_Time: s{end_time: .4f}"
@@ -244,51 +238,83 @@ class Job:
         self.shortage = 0  # 부족 수량 (Shortage Cost 계산용)
 
 
-
 # Printer 클래스: 프린터의 작업 처리
 class Printer:
     def __init__(self, env, printing_cost, daily_events, printer_id, width, height, depth, post_processor):
-        self.env = env  # SimPy 환경 객체
-        self.daily_events = daily_events  # 일별 이벤트 로그 리스트
-        self.printer_id = printer_id  # 프린터 ID
-        self.width = width # 프린터의 최대 처리 너비
-        self.height = height # 프린터의 최대 처리 높이
-        self.depth = depth # 프런티의 최대 처리 깊이이
-        self.is_busy = False  # 프린터 상태 (초기값: 비활성)
-        self.inventory = PRINTERS_INVEN[printer_id]  # 프린터 작업 대기열
-        self.post_processor = post_processor  # PostProcessing 객체 참조
+        self.env = env
+        self.daily_events = daily_events
+        self.printer_id = printer_id
+        
+        # 프린터의 최대 치수
+        self.width = width
+        self.height = height
+        self.depth = depth
+        
+        # 바쁨 상태 및 대기열
+        self.is_busy = False
+        
+        self.post_processor = post_processor
         self.unit_printing_cost = printing_cost
 
-    def process_jobs(self):
-        """프린터의 Job 처리"""
-        while True:
-            if self.inventory:  # 대기열에 Job이 있는 경우
-                job = self.inventory.pop(0)
-                self.is_busy = True
-                start_time = self.env.now
-                self.daily_events.append(
-                    f"{int(self.env.now % 24)}:{int((self.env.now % 1) * 60):02d} - Job {job.job_id} is printed on Printer {self.printer_id} (Print)"
-                )
-                # Printing 비용 계산
-                Cost.cal_cost(job, "Printing cost")
-                
-                yield self.env.timeout(job.build_time)  # 작업 처리 시간 대기
-                end_time = self.env.now
-                self.is_busy = False
-                self.daily_events.append(
-                    f"{int(self.env.now % 24)}:{int((self.env.now % 1) * 60):02d} - Job {job.job_id} is finishing on Printer {self.printer_id} (Print)"
-                )
-                # DAILY_REPORTS에 기록
-                DAILY_REPORTS.append({
-                    'job_id': job.job_id,
-                    'printer_id': self.printer_id,
-                    'start_time': start_time,
-                    'end_time': end_time,
-                    'process': 'Printing'
-                })
-                self.post_processor.assign_job(job)  # 후처리 작업으로 전달
-            else:
-                yield self.env.timeout(1)  # 대기열이 비었을 경우 대기
+    def assign_job(self, job):
+        self.daily_events.append(
+            f"[{self.env.now}] Job {job.job_id} is assigned to Printer {self.printer_id}."
+        )
+
+        if not self.is_busy:
+            # 프린터가 비어 있으면 즉시 처리
+            self.is_busy = True
+            self.env.process(self.process_job(job))
+        else:
+            # 이미 바쁜 상태라면 어떻게 처리할지 결정
+            # 예) 로그만 남김, 혹은 다른 프린터 찾기, 에러 처리 등
+            self.daily_events.append(
+                f"[{self.env.now}] Printer {self.printer_id} is busy. Job {job.job_id} cannot be processed right now."
+            )
+        '''
+        if Customer.create_job_list and len(self.job_list) == 0:
+            for job in Customer.create_job_list:
+                for printer_id in job.suitable_printers:
+                    if PRINTERS[printer_id]["is_busy"] is False:
+                        
+                        self.is_busy = True
+                        Customer.create_job_list.remove(job)
+                        PRINTERS[printer_id]["is_busy"] = True
+                        self.daily_events.append(
+                            f"Job {job.job_id} assigned to Printer {self.printer_id} at {self.env.now}."
+                        )
+                        # 작업 처리시작
+                        self.env.process(self.process_job(job))
+                        return
+            # 모든 프린터가 바쁠 경우 대기열에 저장
+            self.daily_events.append('All printers are busy. Job added to the queue.')
+            
+        else:
+            # 대기열에 추가
+            appending_job = Customer.create_job_list[0]
+            self.job_list.append(appending_job)
+            Customer.create_job_list.remove(appending_job)
+        '''    
+    def process_job(self, job):
+        """
+        실제 Job을 처리하는 메서드.
+        """
+        start_time = self.env.now
+        self.daily_events.append(
+            f"[{start_time}] Printer {self.printer_id} starts printing Job {job.job_id}."
+        )
+
+        # 예: job.build_time만큼 소요 (단위에 맞춰 조정)
+        yield self.env.timeout(job.build_time)
+
+        end_time = self.env.now
+        self.is_busy = False
+        self.daily_events.append(
+            f"[{end_time}] Printer {self.printer_id} finished printing Job {job.job_id}."
+        )
+
+        # 후처리
+        self.post_processor.assign_job(job)
 
 
 class Cost:
@@ -366,6 +392,44 @@ class Satisfication:
 
         SATISFICATION_LOG.append(self.total_satisfication)
 
+def job_dispatcher(env, customer, printers, daily_events):
+    
+    while True:
+        # create_job_list가 비어있지 않은 경우
+        if customer.create_job_list:
+            # 현재 queue(리스트)를 복사해서 for문에서 안전하게 순회하기 위함
+            job_list_snapshot = list(customer.create_job_list)
+            
+            for job in job_list_snapshot:
+                assigned = False
+            
+                # job.suitable_printers에 있는 프린터 중 현재 is_busy가 False인 곳 탐색
+                for printer_obj in printers:
+                    # Printer의 ID가 job의 suitable_printers 중 하나인지 체크
+                    if (printer_obj.printer_id in job.suitable_printers and printer_obj.is_busy == False):
+                        success = printer_obj.assign_job(job)
+                        
+                        if success:
+                            # 성공적으로 활당되면 create_job_list에서 제거
+                            customer.create_job_list.remove(job)
+                            assigned = True
+                            break # 해당 job을 처리했으므로 프린터 탐색 종료 
+                        
+                if not assigned:
+                    # 이 Job을 할당할 수 있는 프린터가 없는 경우
+                    daily_events.append(
+                        f"Dispatcher: No available printer for Job {job.job_id} at time {env.now}. "
+                        f"Will re-check after some delay."
+                    )
+                    
+            # 모든 job을 한 차례 확인한 뒤 잠시 대기
+            yield env.timeout(1)
+            
+        else:
+            # 대기 열이 비었다면 일정 시간 대기
+            yield env.timeout(1)
+                
+
 # 환경 생성 함수
 def create_env(daily_events):
     """
@@ -398,7 +462,10 @@ def simpy_event_processes(simpy_env, packaging, post_processor, customer, displa
     # Day 추적 및 Job 생성 프로세스 추가
     simpy_env.process(display.track_days())
     simpy_env.process(customer.create_jobs_continuously())
-
+    # Dispatcher 등록
+    simpy_env.process(job_dispatcher(simpy_env, customer, printers, daily_events))
+    '''
     # 각 프린터의 작업 처리 프로세스 추가
     for printer in printers:
         simpy_env.process(printer.process_jobs())
+    '''
